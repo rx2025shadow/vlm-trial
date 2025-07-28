@@ -152,7 +152,7 @@
         <video id="videoFeed" autoplay playsinline></video>
         <canvas id="canvas" class="hidden"></canvas>
         <div class="controls">
-            <input id="baseURL" type="hidden" value="https://ql8xt0oq0yy21c-8080.proxy.runpod.net">
+            <input id="baseURL" type="hidden" value="https://53ee4fb02e18.ngrok-free.app">
             <textarea id="instructionText" class="hidden">look for dangerous object, sharp object or event and gives an alert according to the dangers object or event.</textarea>
 
             <div class="input-group">
@@ -179,6 +179,7 @@
         const alertContainer = document.getElementById('alertContainer');
 
         let stream;
+        let intervalId;
         let isProcessing = false;
 
         const dangerKeywords = [
@@ -251,30 +252,24 @@
             return canvas.toDataURL('image/jpeg', 0.8);
         }
 
-        async function processingLoop() {
-            // Stop the loop if the user has clicked "Stop"
+        async function sendData() {
             if (!isProcessing) return;
 
             const instruction = instructionText.value;
             const imageBase64URL = captureImage();
 
-            if (imageBase64URL) {
-                // Wait for the server to respond before continuing
-                const response = await sendChatCompletionRequest(instruction, imageBase64URL);
-                const lowerCaseResponse = response.toLowerCase();
+            if (!imageBase64URL) return;
 
-                const isDangerous = dangerKeywords.some(keyword => lowerCaseResponse.includes(keyword));
+            const response = await sendChatCompletionRequest(instruction, imageBase64URL);
+            const lowerCaseResponse = response.toLowerCase();
 
-                if (isDangerous) {
-                    showAlert(`Danger: ${response}`, 'danger');
-                } else {
-                    showAlert('All Clear', 'all-clear');
-                }
+            const isDangerous = dangerKeywords.some(keyword => lowerCaseResponse.includes(keyword));
+
+            if (isDangerous) {
+                showAlert(`Danger: ${response}`, 'danger');
+            } else {
+                showAlert('All Clear', 'all-clear');
             }
-
-            // Schedule the next run after the interval has passed
-            const intervalMs = parseInt(intervalSelect.value, 10);
-            setTimeout(processingLoop, intervalMs);
         }
 
         function handleStart() {
@@ -287,12 +282,15 @@
             startButton.classList.replace('start', 'stop');
             intervalSelect.disabled = true;
 
-            // Start the processing loop
-            processingLoop();
+            const intervalMs = parseInt(intervalSelect.value, 10);
+            sendData();
+            intervalId = setInterval(sendData, intervalMs);
         }
 
         function handleStop() {
             isProcessing = false;
+            if (intervalId) clearInterval(intervalId);
+            intervalId = null;
             startButton.textContent = "Start Scan";
             startButton.classList.replace('stop', 'start');
             intervalSelect.disabled = false;
@@ -310,6 +308,7 @@
 
         window.addEventListener('beforeunload', () => {
             if (stream) stream.getTracks().forEach(track => track.stop());
+            if (intervalId) clearInterval(intervalId);
         });
     </script>
 </body>
