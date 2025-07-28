@@ -179,7 +179,6 @@
         const alertContainer = document.getElementById('alertContainer');
 
         let stream;
-        let intervalId;
         let isProcessing = false;
 
         const dangerKeywords = [
@@ -252,24 +251,30 @@
             return canvas.toDataURL('image/jpeg', 0.8);
         }
 
-        async function sendData() {
+        async function processingLoop() {
+            // Stop the loop if the user has clicked "Stop"
             if (!isProcessing) return;
 
             const instruction = instructionText.value;
             const imageBase64URL = captureImage();
 
-            if (!imageBase64URL) return;
+            if (imageBase64URL) {
+                // Wait for the server to respond before continuing
+                const response = await sendChatCompletionRequest(instruction, imageBase64URL);
+                const lowerCaseResponse = response.toLowerCase();
 
-            const response = await sendChatCompletionRequest(instruction, imageBase64URL);
-            const lowerCaseResponse = response.toLowerCase();
+                const isDangerous = dangerKeywords.some(keyword => lowerCaseResponse.includes(keyword));
 
-            const isDangerous = dangerKeywords.some(keyword => lowerCaseResponse.includes(keyword));
-
-            if (isDangerous) {
-                showAlert(`Danger: ${response}`, 'danger');
-            } else {
-                showAlert('All Clear', 'all-clear');
+                if (isDangerous) {
+                    showAlert(`Danger: ${response}`, 'danger');
+                } else {
+                    showAlert('All Clear', 'all-clear');
+                }
             }
+
+            // Schedule the next run after the interval has passed
+            const intervalMs = parseInt(intervalSelect.value, 10);
+            setTimeout(processingLoop, intervalMs);
         }
 
         function handleStart() {
@@ -282,15 +287,12 @@
             startButton.classList.replace('start', 'stop');
             intervalSelect.disabled = true;
 
-            const intervalMs = parseInt(intervalSelect.value, 10);
-            sendData();
-            intervalId = setInterval(sendData, intervalMs);
+            // Start the processing loop
+            processingLoop();
         }
 
         function handleStop() {
             isProcessing = false;
-            if (intervalId) clearInterval(intervalId);
-            intervalId = null;
             startButton.textContent = "Start Scan";
             startButton.classList.replace('stop', 'start');
             intervalSelect.disabled = false;
@@ -308,7 +310,6 @@
 
         window.addEventListener('beforeunload', () => {
             if (stream) stream.getTracks().forEach(track => track.stop());
-            if (intervalId) clearInterval(intervalId);
         });
     </script>
 </body>
